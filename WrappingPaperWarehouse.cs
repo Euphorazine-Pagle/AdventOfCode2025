@@ -1,61 +1,53 @@
 namespace AdventOfCode2025.Framework
 {
-    public static class WrappingPaperWarehouse
+    public class WrappingPaperWarehouse
     {
-        public static int CountMovableContainers(List<string> lines)
-        {
-            var containers = InventoryCheck(lines).ToList();
-            containers.ForEach(c => c.CalculateNeighbors(containers));
+        public int Width { get; private set; }
+        public int Height { get; private set; }
 
-            return containers.Count(c => c.Neighbors.Count <= 3);
+        private List<Container> _containers = new List<Container>();
+        public IEnumerable<Container> Containers => _containers;
+
+        public int MarkedContainers => _containers.Count(c => c.MarkedForRemoval && !c.Removed);
+        public int RemovedContainerCount => _containers.Count(c=>c.Removed);
+
+        public WrappingPaperWarehouse(List<string> lines)
+        {
+            Width = lines.Max(l => l.Length);
+            Height = lines.Count;
+
+            _containers.AddRange(InventoryCheck(lines));
+
+            _containers.ForEach(c => c.CalculateNeighbors(_containers));
         }
 
-        public static IEnumerable<Container> InventoryCheck(List<string> lines)
+        public void MarkForRemoval()
         {
-            List<Container> result = lines.Select((line, y) => new { line, y })
-                .Aggregate(new List<Container>(), (acc, line) =>
-                {
-                    acc.AddRange(InventoryLineCheck(line.line, line.y));
-                    return acc;
-                });
-
-            return result;
+            _containers.ForEach(c => c.MarkSelfForRemoval());
         }
 
-        public static IEnumerable<Container> InventoryLineCheck(string line, int indexY)
+        public bool RemoveContainers()
         {
-            return line.Select((character, x) => new { character, x })
-                    .Aggregate(new List<Container>(), (acc, character) =>
-                    {
-                        if (character.character == '@')
-                        {
-                            acc.Add(new Container() { X = character.x, Y = indexY });
-                        }
-                        return acc;
-                    });
+            return _containers.Count(c => c.RemoveSelf()) > 0;
         }
 
-        public static int RemoveContainers(List<string> lines)
+        public void RefreshContainers()
         {
-            var containers = InventoryCheck(lines).ToList();
-            int startingInvCount = containers.Count();
-
-            containers.ForEach(c => c.CalculateNeighbors(containers));
-
-            int removed = -1;
-            while (removed != 0)
-            {
-                var contCopy = containers.ToList();
-                removed = contCopy.Sum(c => c.RemoveSelf(containers));
-            }
-
-            return startingInvCount - containers.Count();
+            _containers.ForEach(c => { c.MarkedForRemoval = false; c.Removed = false; });
         }
+
+        public static IEnumerable<Container> InventoryCheck(List<string> lines) {}
+
+        public static IEnumerable<Container> InventoryLineCheck(string line, int indexY) {}
+
+        public static int RemoveContainers(List<string> lines) {}
 
         public class Container()
         {
             public int X { get; set; }
             public int Y { get; set; }
+            public bool MarkedForRemoval { get; set; }
+            public bool Removed { get; set; }
             public List<Container> Neighbors { get; set; } = new List<Container>();
 
             public void CalculateNeighbors(IEnumerable<Container> allContainers)
@@ -64,29 +56,26 @@ namespace AdventOfCode2025.Framework
                 Neighbors.AddRange(filtered.Where(c => c != this));
             }
 
-            public void RemoveNeighbor(Container container)
+            public bool MarkSelfForRemoval()
             {
-                if (Neighbors.Contains(container))
+                if (Neighbors.Count(n => !n.Removed) < 4)
                 {
-                    Neighbors.Remove(container);
+                    MarkedForRemoval = true;
+                    return true;
                 }
+
+                return false;
             }
 
-            public int RemoveSelf(List<Container> containers)
+            public bool RemoveSelf()
             {
-                if (Neighbors.Count >= 4)
+                if (!MarkedForRemoval || Removed)
                 {
-                    return 0;
+                    return false;
                 }
 
-                foreach (var container in Neighbors)
-                {
-                    container.RemoveNeighbor(this);
-                }
-
-                containers.Remove(this);
-
-                return 1;
+                Removed = true;
+                return true;
             }
         }
     }
